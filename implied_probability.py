@@ -1,21 +1,3 @@
-"""
-Implied Probability Distribution from Options Prices
-------------------------------------------------------
-What this does:
-  1. Pulls a live options chain for a chosen ticker (via yfinance)
-  2. Picks an expiry roughly N days out
-  3. Finds the at-the-money implied volatility (averaging the nearest call & put)
-  4. Uses the Black-Scholes assumption that terminal prices are lognormally
-     distributed to build the market's IMPLIED probability distribution
-     for where the stock will be at expiry
-  5. Compares that to the stock's own historical realized volatility over
-     a similar lookback window, plotting both distributions side by side
-  6. Prints concrete probability statements, e.g. "the market implies a
-     14% chance AAPL is above $220 by March expiry"
-
-Run this locally (needs live internet access to Yahoo Finance).
-Install deps first:  pip install yfinance scipy matplotlib numpy --break-system-packages
-"""
 
 import numpy as np
 import pandas as pd
@@ -24,17 +6,15 @@ from scipy.stats import lognorm
 import matplotlib.pyplot as plt
 from datetime import datetime
 
-# ----------------------------
-# CONFIG — change these
-# ----------------------------
-TICKER = "NVDA"          # any liquid, well-optioned name works
-TARGET_DAYS_OUT = 40     # roughly how far out you want the expiry to be
-RISK_FREE_RATE = 0.045   # approx current short-term rate; update as needed
-THRESHOLDS_PCT = [-0.10, -0.05, 0.05, 0.10]  # +/-5% and +/-10% moves to report on
+
+TICKER = "NVDA"          
+TARGET_DAYS_OUT = 40     
+RISK_FREE_RATE = 0.045   
+THRESHOLDS_PCT = [-0.10, -0.05, 0.05, 0.10]  
 
 
 def pick_expiry(ticker_obj, target_days):
-    """Pick the listed expiry closest to `target_days` calendar days out."""
+    
     expiries = ticker_obj.options
     today = datetime.today()
     diffs = [(abs((datetime.strptime(e, "%Y-%m-%d") - today).days - target_days), e)
@@ -46,11 +26,7 @@ def pick_expiry(ticker_obj, target_days):
 
 
 def get_atm_iv(ticker_obj, expiry, spot):
-    """
-    Find the strike closest to the current spot price and average the
-    call + put implied volatility at that strike. Falls back to using
-    whichever side has data if one side is missing/illiquid.
-    """
+   
     chain = ticker_obj.option_chain(expiry)
     calls, puts = chain.calls, chain.puts
 
@@ -76,11 +52,7 @@ def get_atm_iv(ticker_obj, expiry, spot):
 
 
 def build_lognormal(spot, iv, T, r):
-    """
-    Black-Scholes risk-neutral assumption: ln(S_T) ~ Normal(mu, sigma^2)
-    with mu chosen so E[S_T] = forward price = S0 * exp(rT).
-    Returns a scipy lognorm distribution object.
-    """
+   
     forward = spot * np.exp(r * T)
     mu = np.log(forward) - 0.5 * (iv ** 2) * T
     sigma = iv * np.sqrt(T)
@@ -89,11 +61,7 @@ def build_lognormal(spot, iv, T, r):
 
 
 def historical_realized_vol(ticker_obj, lookback_days=252, horizon_days=30):
-    """
-    Pull historical daily closes, compute annualized realized volatility,
-    then build a comparison lognormal distribution assuming the SAME
-    horizon as the option (so it's an apples-to-apples comparison).
-    """
+   
     hist = ticker_obj.history(period=f"{lookback_days}d")
     log_returns = np.log(hist["Close"] / hist["Close"].shift(1)).dropna()
     daily_vol = log_returns.std()
@@ -133,14 +101,14 @@ def main():
 
     summarize_probabilities(implied_dist, spot, THRESHOLDS_PCT)
 
-    # --- Historical realized vol comparison over a similar horizon ---
+  
     realized_vol = historical_realized_vol(t, lookback_days=252, horizon_days=days_out)
     realized_dist, _ = build_lognormal(spot, realized_vol, T, RISK_FREE_RATE)
     print(f"\nHistorical realized volatility (annualized, trailing 1yr): {realized_vol:.1%}")
     print("(vs. implied volatility priced in the options market above)")
     summarize_probabilities(realized_dist, spot, THRESHOLDS_PCT)
 
-    # --- Plot both distributions ---
+   
     price_range = np.linspace(spot * 0.6, spot * 1.6, 500)
     implied_pdf = implied_dist.pdf(price_range)
     realized_pdf = realized_dist.pdf(price_range)
